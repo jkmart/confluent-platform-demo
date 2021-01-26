@@ -1,0 +1,67 @@
+---
+# confluent-base.yml
+- name: 'Provision to act as repository and server for Confluent Platform files'
+  hosts: default
+  become: true
+  vars:
+    serve_path: /var/www/html/confluent/
+    repo_path: /var/www/html/repos/
+  tasks:
+    - name: install RPM repo tools
+      package:
+        name: curl,which,createrepo,yum-utils
+        state: present
+
+    - name: add confluent rpm key
+      command: rpm --import https://packages.confluent.io/rpm/6.0/archive.key
+
+    - name: add confluent repo
+      copy:
+        src: ./confluent.repo
+        dest: /etc/yum.repos.d/confluent.repo
+
+    - name: create and sync repositories
+      include_tasks: ./tasks/create-repos.yml
+      with_items:
+        - Confluent.dist
+        - Confluent
+        - rhel-7-server-rhui-rpms
+        - rhel-7-server-rhui-rh-common-rpms
+
+    - name: create the repo for use
+      command: createrepo {{ repo_path }}
+
+    - name: add folder for Confluent resources
+      file:
+        state: directory
+        path: "{{ serve_path }}"
+
+      # The following "copy" commands require the resources to be located in this directory
+    - name: copy jmx prometheus jar
+      copy:
+        src: jmx_prometheus_javaagent-0.12.0.jar
+        dest: "{{ serve_path }}jmx_prometheus_javaagent-0.12.0.jar"
+
+    - name: copy jmx jolokia jar
+      copy:
+        src: jolokia-jvm-1.6.2-agent.jar
+        dest: "{{ serve_path }}jolokia-jvm-1.6.2-agent.jar"
+
+    - name: copy confluent syslog connector
+      copy:
+        src: confluentinc-kafka-connect-syslog-1.3.2.zip
+        dest: "{{ serve_path }}confluentinc-kafka-connect-syslog-1.3.2.zip"
+
+    - name: install apache webserver
+      package:
+        name: httpd
+        state: present
+
+    - name: start and enable apache webserver
+      systemd:
+        name: httpd
+        state: started
+        enabled: yes
+
+    - name: set SELinux context for /var/www/
+      command: chcon system_u:object_r:httpd_sys_content_t:s0 -R /var/www/

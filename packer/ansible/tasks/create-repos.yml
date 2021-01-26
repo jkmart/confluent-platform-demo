@@ -1,0 +1,8 @@
+---
+# create-repos.yml
+- name: create repo directory
+  file:
+    state: directory
+    path: "{{ repo_path }}{{ item }}"
+- name: reposync the directory
+  command: reposync --gpgcheck --plugins --repoid={{ item }} --newest-only --delete --downloadcomps --download-metadata --download_path={{ repo_path }}
